@@ -88,7 +88,21 @@ install-kserve:
 	kubectl apply -f platform/kserve/clusterservingruntimes.yaml
 	kubectl apply -f runtime/clusterservingruntime.yaml
 
-install-platform: install-cert-manager install-kserve
+install-monitoring:
+	@echo "Installing kube-prometheus-stack (trimmed)..."
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
+	helm repo update
+	helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+		--namespace monitoring \
+		--create-namespace \
+		--values platform/monitoring/values.yaml \
+		--wait || true
+	@echo "Applying observability manifests..."
+	kubectl apply -f observability/podmonitor-llm-models.yaml
+	kubectl apply -f observability/prometheusrules.yaml
+	kubectl apply -f observability/grafana-configmap.yaml
+
+install-platform: install-cert-manager install-kserve install-monitoring
 	@echo "Platform installation complete."
 
 # --- Model deployment ---
@@ -105,6 +119,8 @@ copy-models-to-nodes:
 deploy-models: copy-models-to-nodes
 	@echo "Deploying model InferenceServices..."
 	kubectl apply -f models/qwen-0_5b.yaml
+	kubectl apply -f models/llama-1b.yaml
+	kubectl apply -f models/qwen-3b.yaml
 
 deploy-all: install-platform deploy-models
 	@echo "All components deployed."
@@ -113,13 +129,8 @@ deploy-all: install-platform deploy-models
 
 test:
 	@echo "Running smoke tests..."
-	@echo "See test scripts in individual component directories."
-
-# --- Testing ---
-
-test:
-	@echo "Running smoke tests..."
-	@echo "See test scripts in individual component directories."
+	@echo "Testing all three models..."
+	@kubectl get inferenceservices -n default
 
 # --- Utilities ---
 

@@ -1,0 +1,151 @@
+# kube-prometheus-stack Helm values
+# Trimmed for 11GB VM budget
+# Pinned chart: prometheus-community/kube-prometheus-stack (latest stable)
+
+# --- Prometheus ---
+
+prometheus:
+  prometheusSpec:
+    # 6h retention
+    retention: 6h
+    
+    # Reduce memory usage
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    
+    # Don't need persistent storage for laptop demo
+    storageSpec: {}
+    
+    # Reduce scrape interval for non-critical targets
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    
+    # Enable wal compression
+    walCompression: true
+    
+    # Service discovery for ServiceMonitors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+
+# --- Alertmanager ---
+
+alertmanager:
+  enabled: true
+  # No HA - single replica
+  alertmanagerSpec:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 256Mi
+
+# --- Grafana ---
+
+grafana:
+  enabled: true
+  adminPassword: admin
+  
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  
+  # Provision dashboards from ConfigMaps
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+  
+  dashboardsConfigMaps:
+    default: grafana-dashboards-llm
+
+# --- kube-state-metrics ---
+
+kubeStateMetrics:
+  enabled: true
+
+# --- node-exporter ---
+
+nodeExporter:
+  enabled: true
+
+# --- prometheusOperator ---
+
+prometheusOperator:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  
+  # Reduce admission webhook resources
+  admissionWebhooks:
+    patch:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+
+# --- Disable heavy extras ---
+
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false
+    configReloaders: false
+    general: true
+    k8s: true
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeControllerManager: false
+    kubelet: true
+    kubeProxy: false
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: false
+    kubernetesApps: false
+    kubernetesResources: true
+    kubernetesStorage: false
+    kubernetesSystem: false
+    kubeSchedulerAlerting: false
+    kubeStateMetrics: true
+    network: false
+    node: true
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
+    prometheus: true
+    prometheusOperator: false
+
+# Don't create additional scrape configs
+additionalPrometheusRulesMap: {}

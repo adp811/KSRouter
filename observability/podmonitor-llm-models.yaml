@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: llm-model-metrics
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      component: predictor
+  podMetricsEndpoints:
+  - port: http1
+    path: /metrics
+    interval: 15s
+    scrapeTimeout: 10s

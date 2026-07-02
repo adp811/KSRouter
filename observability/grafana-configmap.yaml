@@ -1,0 +1,175 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-llm
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  llm-serving.json: |
+    {
+      "id": null,
+      "title": "LLM Serving Dashboard",
+      "tags": ["llm", "kserve", "llama.cpp"],
+      "timezone": "browser",
+      "schemaVersion": 38,
+      "refresh": "5s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Prompt Tokens/sec (by model)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {
+              "expr": "rate(llamacpp:prompt_tokens_total[1m])",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "tps",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Generation Tokens/sec (by model)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {
+              "expr": "rate(llamacpp:tokens_predicted_total[1m])",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "tps",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Avg Prompt Throughput (tokens/s)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+          "targets": [
+            {
+              "expr": "llamacpp:prompt_tokens_seconds",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Avg Generation Throughput (tokens/s)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+          "targets": [
+            {
+              "expr": "llamacpp:predicted_tokens_seconds",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Total Decodes (cumulative)",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+          "targets": [
+            {
+              "expr": "llamacpp:n_decode_total",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Max Tokens Observed",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+          "targets": [
+            {
+              "expr": "llamacpp:n_tokens_max",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "title": "Pod Memory Usage (bytes)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+          "targets": [
+            {
+              "expr": "container_memory_working_set_bytes{namespace=\"default\", container!=\"\"}",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 8,
+          "title": "Pod CPU Usage (cores)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+          "targets": [
+            {
+              "expr": "rate(container_cpu_usage_seconds_total{namespace=\"default\", container!=\"\"}[1m])",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 9,
+          "title": "Request Latency (prompt + generation per token)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+          "targets": [
+            {
+              "expr": "llamacpp:prompt_seconds_total / llamacpp:prompt_tokens_total",
+              "legendFormat": "{{pod}} - prompt/ttoken",
+              "refId": "A"
+            },
+            {
+              "expr": "llamacpp:tokens_predicted_seconds_total / llamacpp:tokens_predicted_total",
+              "legendFormat": "{{pod}} - gen/ttoken",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        }
+      ],
+      "time": {
+        "from": "now-5m",
+        "to": "now"
+      }
+    }

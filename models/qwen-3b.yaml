@@ -1,7 +1,7 @@
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
-  name: qwen-0-5b
+  name: qwen-3b
   namespace: default
 spec:
   predictor:
@@ -11,11 +11,11 @@ spec:
       runtime: llama-cpp-server
       args:
         - --model
-        - /mnt/gguf-models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+        - /mnt/gguf-models/qwen2.5-3b-instruct-q4_k_m.gguf
       resources:
         requests:
-          cpu: 500m
-          memory: 512Mi
+          cpu: 1000m
+          memory: 2Gi
         limits:
-          cpu: 2000m
-          memory: 1Gi
+          cpu: 4000m
+          memory: 3Gi

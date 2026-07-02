@@ -1,0 +1,61 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: llm-serving-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: llm-serving
+    rules:
+    - alert: ModelPodMemoryHigh
+      expr: |
+        container_memory_working_set_bytes{namespace="default", container!=""} /
+        container_spec_memory_limit_bytes{namespace="default", container!=""} > 0.9
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Model pod memory usage > 90% of limit"
+        description: "Pod {{ $labels.pod }} memory usage is {{ $value | humanizePercentage }} of limit"
+
+    - alert: ModelEndpointDown
+      expr: |
+        up{job="monitoring/llm-model-metrics"} == 0
+      for: 30s
+      labels:
+        severity: critical
+      annotations:
+        summary: "Model endpoint down"
+        description: "Model pod {{ $labels.pod }} metrics endpoint is not reachable"
+
+    - alert: VMMemoryPressure
+      expr: |
+        (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "VM memory pressure"
+        description: "VM memory usage is {{ $value | humanizePercentage }}"
+
+    - alert: HighGenerationLatency
+      expr: |
+        (llamacpp:tokens_predicted_seconds_total / llamacpp:tokens_predicted_total) > 0.5
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High generation latency per token"
+        description: "Pod {{ $labels.pod }} generation latency > 500ms/token"
+
+    - alert: LowTokenThroughput
+      expr: |
+        rate(llamacpp:tokens_predicted_total[1m]) < 1
+      for: 2m
+      labels:
+        severity: info
+      annotations:
+        summary: "Low token throughput"
+        description: "Pod {{ $labels.pod }} token throughput < 1 token/sec"
