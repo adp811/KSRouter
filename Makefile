@@ -122,7 +122,17 @@ deploy-models: copy-models-to-nodes
 	kubectl apply -f models/llama-1b.yaml
 	kubectl apply -f models/qwen-3b.yaml
 
-deploy-all: install-platform deploy-models
+build-router:
+	@echo "Building router image..."
+	docker build -t llm-router:latest router/
+	k3d image import llm-router:latest --cluster $(CLUSTER_NAME)
+
+deploy-router: build-router
+	@echo "Deploying router..."
+	kubectl apply -f router/manifests/deployment.yaml
+	kubectl apply -f router/manifests/podmonitor.yaml
+
+deploy-all: install-platform deploy-models deploy-router
 	@echo "All components deployed."
 
 # --- Testing ---
@@ -131,6 +141,8 @@ test:
 	@echo "Running smoke tests..."
 	@echo "Testing all three models..."
 	@kubectl get inferenceservices -n default
+	@echo "Testing router..."
+	@kubectl get pods -n default -l app=llm-router
 
 # --- Utilities ---
 

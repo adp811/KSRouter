@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-router
+  namespace: default
+  labels:
+    app: llm-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-router
+  template:
+    metadata:
+      labels:
+        app: llm-router
+        component: router
+    spec:
+      containers:
+      - name: router
+        image: llm-router:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: SMALL_MODEL_URL
+          value: "http://qwen-0-5b-predictor.default.svc.cluster.local/v1/chat/completions"
+        - name: MEDIUM_MODEL_URL
+          value: "http://llama-1b-predictor.default.svc.cluster.local/v1/chat/completions"
+        - name: LARGE_MODEL_URL
+          value: "http://qwen-3b-predictor.default.svc.cluster.local/v1/chat/completions"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-router
+  namespace: default
+  labels:
+    app: llm-router
+spec:
+  selector:
+    app: llm-router
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  type: ClusterIP

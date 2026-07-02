@@ -166,6 +166,99 @@ data:
               "custom": {"drawStyle": "line"}
             }
           }
+        },
+        {
+          "id": 10,
+          "title": "Router: Routing Decisions by Tier",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+          "targets": [
+            {
+              "expr": "rate(router_route_decisions_total[1m])",
+              "legendFormat": "{{tier}} ({{method}})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 11,
+          "title": "Router: Upstream Latency by Tier",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, rate(router_upstream_latency_seconds_bucket[1m]))",
+              "legendFormat": "p50 {{tier}}",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, rate(router_upstream_latency_seconds_bucket[1m]))",
+              "legendFormat": "p95 {{tier}}",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 12,
+          "title": "Router: Overhead (routing decision time)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, rate(router_overhead_seconds_bucket[1m]))",
+              "legendFormat": "p50 {{method}}",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, rate(router_overhead_seconds_bucket[1m]))",
+              "legendFormat": "p95 {{method}}",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {"drawStyle": "line"}
+            }
+          }
+        },
+        {
+          "id": 13,
+          "title": "Router: Fallback Count",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 36},
+          "targets": [
+            {
+              "expr": "router_fallback_count_total",
+              "legendFormat": "{{reason}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "title": "Router: Upstream Errors",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 36},
+          "targets": [
+            {
+              "expr": "router_upstream_errors_total",
+              "legendFormat": "{{tier}} - {{error_type}}",
+              "refId": "A"
+            }
+          ]
         }
       ],
       "time": {
