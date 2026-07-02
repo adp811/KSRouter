@@ -3,8 +3,12 @@ kind: InferenceService
 metadata:
   name: qwen-0-5b
   namespace: default
+  annotations:
+    serving.kserve.io/autoscalerClass: external
 spec:
   predictor:
+    minReplicas: 1
+    maxReplicas: 3
     model:
       modelFormat:
         name: gguf

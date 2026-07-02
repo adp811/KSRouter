@@ -315,3 +315,50 @@ Swap:              0           0           0
 
 ---
 
+## Phase 5 — KEDA autoscaling (with fixes)
+
+**Status:** COMPLETED ✅
+
+**Date:** 2026-07-02
+
+### Problem Summary
+
+KEDA autoscaling was not working because:
+1. **Volatile metrics:** `llamacpp:prompt_tokens_total` rate and `router_active_requests` gauge were too ephemeral (spikes lasting <1s). KEDA/Prometheus scrape interval missed them.
+2. **Prometheus `increase()` timing:** `increase(router_route_decisions_total[1m])` returned 0 because KEDA evaluated after the burst ended.
+3. **KServe controller fighting KEDA:** Even with `autoscalerClass: none`, KServe v0.18.0 reset the Deployment `replicas` back to 1 within seconds, killing pods before they started.
+
+### Solution
+
+1. **Stable `router_recent_requests` gauge:** Added a sliding-window gauge in the router that counts requests started in the last 60 seconds. This metric persists after the burst ends and decays smoothly, giving KEDA a stable signal.
+2. **Per-tier gauge:** Added `router_recent_requests_by_tier` to enable tier-specific scaling (used for large-model scale-to-zero).
+3. **KServe `autoscalerClass: external`:** Changed annotation from `none` to `external` (based on KServe PR #4196). This tells KServe to not manage replicas or HPA, allowing KEDA full control.
+
+### Acceptance Criteria Verification
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| KEDA scales small model from 1 → 3 during burst | ✅ PASS | 30s burst (15 req/s) → HPA metric 151.7/10 → 3 replicas running |
+| KEDA scales small model back to 1 after burst ends | ✅ PASS | Metric decayed to 1.7 after 60s → scaled down 3 → 2 → 1 over 120s (stabilization window) |
+| KServe does not fight KEDA during scale-up/scale-down | ✅ PASS | Manual `kubectl scale` to 2 and burst test both kept replicas; no terminating pods from controller conflict |
+| Large model ScaledObject uses stable metric | ✅ PASS | Updated to `router_recent_requests_by_tier{tier="large"}`; ScaledObject shows `isActive: false` at 0 replicas (expected) |
+
+### KEDA Configuration
+
+| Model | Trigger | Metric | Threshold | Min | Max |
+|---|---|---|---|---|---|
+| qwen-0-5b (small) | Prometheus | `router_recent_requests` | 10 | 1 | 3 |
+| qwen-3b (large) | Prometheus | `router_recent_requests_by_tier{tier="large"}` | 1 | 0 | 1 |
+
+### Scale-Down Behavior
+
+- **Stabilization window:** 120s (prevents flapping)
+- **Scale-down policy:** 10% per 60s (gentle)
+- **Metric decay:** 60s sliding window (natural cooldown)
+
+### Commits
+
+- `fix: KEDA autoscaling - add stable router_recent_requests gauge and use KServe external autoscaler class`
+
+---
+

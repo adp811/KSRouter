@@ -1,0 +1,18 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: prometheus-trigger-auth
+  namespace: default
+spec:
+  secretTargetRef:
+  - parameter: serverAddress
+    name: prometheus-config
+    key: serverAddress
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-config
+  namespace: default
+stringData:
+  serverAddress: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"

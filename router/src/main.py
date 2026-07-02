@@ -3,6 +3,7 @@ import json
 import logging
 import time
 import uuid
+from collections import deque
 from typing import AsyncIterator, Optional
 
 import httpx
@@ -16,10 +17,31 @@ from .metrics import (
     time_to_first_token_seconds,
     tokens_streamed_total,
     active_requests,
+    recent_requests,
+    recent_requests_by_tier,
     generate_latest,
     CONTENT_TYPE_LATEST
 )
 from .routing import determine_tier, MODEL_ENDPOINTS
+
+RECENT_WINDOW = 60.0
+recent_timestamps = deque()
+recent_timestamps_by_tier = {"small": deque(), "medium": deque(), "large": deque()}
+recent_lock = asyncio.Lock()
+
+async def update_recent_requests(tier: Optional[str] = None):
+    now = time.time()
+    async with recent_lock:
+        recent_timestamps.append(now)
+        while recent_timestamps and (now - recent_timestamps[0]) > RECENT_WINDOW:
+            recent_timestamps.popleft()
+        recent_requests.set(len(recent_timestamps))
+
+        if tier:
+            recent_timestamps_by_tier[tier].append(now)
+            while recent_timestamps_by_tier[tier] and (now - recent_timestamps_by_tier[tier][0]) > RECENT_WINDOW:
+                recent_timestamps_by_tier[tier].popleft()
+            recent_requests_by_tier.labels(tier=tier).set(len(recent_timestamps_by_tier[tier]))
 
 logger = logging.getLogger("router")
 
@@ -54,6 +76,14 @@ async def health():
 
 @app.get("/metrics")
 async def metrics():
+    await update_recent_requests()
+    # Clean up per-tier deques as well
+    now = time.time()
+    async with recent_lock:
+        for t, dq in recent_timestamps_by_tier.items():
+            while dq and (now - dq[0]) > RECENT_WINDOW:
+                dq.popleft()
+            recent_requests_by_tier.labels(tier=t).set(len(dq))
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
@@ -94,7 +124,8 @@ async def chat_completions(
     body["model"] = tier
     
     is_streaming = body.get("stream", False)
-    
+
+    await update_recent_requests(tier)
     active_requests.inc()
     start_time = time.time()
     
@@ -104,6 +135,32 @@ async def chat_completions(
                 return await stream_response(client, upstream_url, body, tier, request_id)
             else:
                 return await non_stream_response(client, upstream_url, body, tier, request_id)
+    except httpx.ConnectError as e:
+        # Large model may be scaled to zero (cold start)
+        if tier == "large":
+            upstream_errors_total.labels(tier=tier, error_type="cold_start").inc()
+            logger.warning(
+                "Large model cold start - returning 503 with retry",
+                extra={"request_id": request_id, "tier": tier}
+            )
+            return JSONResponse(
+                status_code=503,
+                headers={"Retry-After": "30"},
+                content={
+                    "error": "Large model is warming up! 🔥",
+                    "message": "Our large brain is taking a power nap. Give it 30 seconds to wake up and grab some coffee! ☕",
+                    "request_id": request_id,
+                    "tier": tier,
+                    "retry_after": 30
+                }
+            )
+        else:
+            upstream_errors_total.labels(tier=tier, error_type="connect").inc()
+            logger.error(f"Upstream connect error: {e}", extra={"request_id": request_id, "tier": tier})
+            return JSONResponse(
+                status_code=502,
+                content={"error": "Upstream connect error", "request_id": request_id}
+            )
     except httpx.TimeoutError:
         upstream_errors_total.labels(tier=tier, error_type="timeout").inc()
         logger.error("Upstream timeout", extra={"request_id": request_id, "tier": tier})

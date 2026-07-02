@@ -50,3 +50,14 @@ active_requests = Gauge(
     "router_active_requests",
     "Number of active requests"
 )
+
+recent_requests = Gauge(
+    "router_recent_requests",
+    "Number of requests started in the last 60 seconds"
+)
+
+recent_requests_by_tier = Gauge(
+    "router_recent_requests_by_tier",
+    "Number of requests started in the last 60 seconds by tier",
+    ["tier"]
+)

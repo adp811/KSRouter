@@ -1,0 +1,42 @@
+# KEDA Helm values
+# Pinned version: 2.20.0
+# Trimmed for 11GB VM budget
+
+resources:
+  operator:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  metricServer:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  webhooks:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Don't need admission webhooks for our use case
+admissionWebhooks:
+  enabled: false
+
+# Single replica for resource savings
+replicaCount: 1
+
+# Disable Prometheus metrics to save resources
+prometheus:
+  metricServer:
+    enabled: false
+  operator:
+    enabled: false
+  webhooks:
+    enabled: false

@@ -1,0 +1,20 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: qwen-3b-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: qwen-3b-predictor
+  minReplicaCount: 0
+  maxReplicaCount: 1
+  pollingInterval: 15
+  cooldownPeriod: 120
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+      metricName: router_large_tier_requests_total
+      threshold: "1"
+      query: |
+        sum(router_recent_requests_by_tier{tier="large"})
