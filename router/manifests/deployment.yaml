@@ -31,6 +31,10 @@ spec:
           value: "http://llama-1b-predictor.default.svc.cluster.local/v1/chat/completions"
         - name: LARGE_MODEL_URL
           value: "http://qwen-3b-predictor.default.svc.cluster.local/v1/chat/completions"
+        - name: CANARY_SMALL_WEIGHT
+          value: "0"
+        - name: CANARY_SMALL_URL
+          value: "http://llama-1b-predictor.default.svc.cluster.local/v1/chat/completions"
         resources:
           requests:
             cpu: 50m

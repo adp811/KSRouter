@@ -22,7 +22,7 @@ from .metrics import (
     generate_latest,
     CONTENT_TYPE_LATEST
 )
-from .routing import determine_tier, MODEL_ENDPOINTS
+from .routing import determine_tier, MODEL_ENDPOINTS, apply_canary
 
 RECENT_WINDOW = 60.0
 recent_timestamps = deque()
@@ -117,8 +117,8 @@ async def chat_completions(
         }
     )
     
-    # Route to appropriate model
-    upstream_url = MODEL_ENDPOINTS[tier]
+    # Route to appropriate model, with canary if configured
+    upstream_url = apply_canary(tier, MODEL_ENDPOINTS[tier])
     
     # Update request body with routed model name
     body["model"] = tier

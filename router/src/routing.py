@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import os
+import random
 import re
 from typing import Optional, Tuple
 
 import httpx
 
-from .metrics import route_decisions_total, fallback_count_total, router_overhead_seconds
+from .metrics import route_decisions_total, fallback_count_total, router_overhead_seconds, canary_routing_total
 
 logger = logging.getLogger("router")
 
@@ -16,6 +17,42 @@ MODEL_ENDPOINTS = {
     "medium": os.environ.get("MEDIUM_MODEL_URL", "http://llama-1b-predictor.default.svc.cluster.local/v1/chat/completions"),
     "large": os.environ.get("LARGE_MODEL_URL", "http://qwen-3b-predictor.default.svc.cluster.local/v1/chat/completions"),
 }
+
+# Canary configuration per tier (weight 0-100)
+# e.g., CANARY_SMALL_WEIGHT=10 means 10% to canary, 90% to stable
+CANARY_CONFIG = {
+    "small": {
+        "weight": int(os.environ.get("CANARY_SMALL_WEIGHT", "0")),
+        "stable_url": os.environ.get("SMALL_MODEL_URL", "http://qwen-0-5b-predictor.default.svc.cluster.local/v1/chat/completions"),
+        "canary_url": os.environ.get("CANARY_SMALL_URL", ""),
+    },
+    "medium": {
+        "weight": int(os.environ.get("CANARY_MEDIUM_WEIGHT", "0")),
+        "stable_url": os.environ.get("MEDIUM_MODEL_URL", "http://llama-1b-predictor.default.svc.cluster.local/v1/chat/completions"),
+        "canary_url": os.environ.get("CANARY_MEDIUM_URL", ""),
+    },
+    "large": {
+        "weight": int(os.environ.get("CANARY_LARGE_WEIGHT", "0")),
+        "stable_url": os.environ.get("LARGE_MODEL_URL", "http://qwen-3b-predictor.default.svc.cluster.local/v1/chat/completions"),
+        "canary_url": os.environ.get("CANARY_LARGE_URL", ""),
+    },
+}
+
+
+def apply_canary(tier: str, url: str) -> str:
+    """Apply canary routing if configured for the tier."""
+    config = CANARY_CONFIG.get(tier)
+    if not config or not config["canary_url"] or config["weight"] <= 0:
+        return url
+    
+    roll = random.randint(1, 100)
+    if roll <= config["weight"]:
+        canary_routing_total.labels(tier=tier, target="canary").inc()
+        logger.info(f"Canary routing: {tier} -> canary (roll={roll}/{config['weight']})")
+        return config["canary_url"]
+    else:
+        canary_routing_total.labels(tier=tier, target="stable").inc()
+        return config["stable_url"]
 
 CLASSIFIER_PROMPT = """You are a request classifier. Classify the user request complexity.
 

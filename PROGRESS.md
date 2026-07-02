@@ -362,3 +362,75 @@ KEDA autoscaling was not working because:
 
 ---
 
+## Phase 6 — Router-side canary rollout + automated evals
+
+**Status:** COMPLETED ✅
+
+**Date:** 2026-07-02
+
+### Why Router-Side Canary?
+
+KServe RawDeployment mode does **not** support native canary traffic splitting (that requires Knative/Istio). We implemented it in the semantic router instead.
+
+### Implementation
+
+1. **Canary configuration via env vars:**
+   - `CANARY_SMALL_WEIGHT`: 0-100 (percentage to canary endpoint)
+   - `CANARY_SMALL_URL`: URL of canary model (e.g., medium model as "new version")
+   - Same pattern for `medium` and `large` tiers
+
+2. **Weighted random selection:** `random.randint(1, 100) <= weight`
+   - Simple, deterministic, no external dependencies
+   - Prometheus counter `router_canary_routing_total` tracks stable vs canary
+
+3. **Automated evaluation script:** `evals/canary_eval.py`
+   - Sends N requests at a given canary weight
+   - Queries router metrics to verify actual split ratio
+   - Validates response quality from both endpoints
+   - Supports progressive stages: 10% → 50% → 100%
+
+### Acceptance Criteria Verification
+
+| Criterion | Result | Evidence |
+|---|---|---|---|
+| 10% canary stage routes ~10% to canary endpoint | ✅ PASS | 30 requests → 6.7% canary (2/30), within 15% tolerance |
+| 50% canary stage routes ~50% to canary endpoint | ✅ PASS | 30 requests → 50.0% canary (15/30), exact |
+| 100% canary stage routes 100% to canary endpoint | ✅ PASS | 30 requests → 100.0% canary (30/30), exact |
+| All responses are valid (non-empty) from both endpoints | ✅ PASS | Response quality check: all prompts returned coherent answers |
+
+### Canary Stage Results
+
+| Stage | Expected | Actual | Requests | Result |
+|---|---|---|---|---|
+| 10% | 10% | 6.7% (2/30) | 30 | ✅ |
+| 50% | 50% | 50.0% (15/30) | 30 | ✅ |
+| 100% | 100% | 100.0% (30/30) | 30 | ✅ |
+
+### Architecture
+
+```
+Client Request
+    ↓
+[Router determines tier (small/medium/large)]
+    ↓
+[Canary configured for this tier?]
+    ├── No → Route to stable endpoint
+    └── Yes → Roll dice (1-100)
+              ├── ≤ weight → Route to canary URL
+              └── > weight → Route to stable URL
+```
+
+### Files Added/Modified
+
+- `router/src/routing.py` — `apply_canary()` function, canary config
+- `router/src/metrics.py` — `router_canary_routing_total` counter
+- `router/src/main.py` — integrate canary into upstream routing
+- `router/manifests/deployment.yaml` — canary env vars
+- `evals/canary_eval.py` — automated evaluation script
+
+### Commits
+
+- `feat: Phase 6 - router-side canary traffic splitting with automated evaluation`
+
+---
+

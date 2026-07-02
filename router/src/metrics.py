@@ -61,3 +61,9 @@ recent_requests_by_tier = Gauge(
     "Number of requests started in the last 60 seconds by tier",
     ["tier"]
 )
+
+canary_routing_total = Counter(
+    "router_canary_routing_total",
+    "Total canary routing decisions",
+    ["tier", "target"]
+)
