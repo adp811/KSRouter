@@ -1,0 +1,34 @@
+# k3d cluster configuration for Laptop-Scale LLM Serving Platform
+# 1 server, 1 agent, Traefik disabled (we use KServe's ingress via NodePort)
+
+apiVersion: k3d.io/v1alpha5
+kind: SimpleConfig
+name: llm-serving
+servers: 1
+agents: 1
+options:
+  k3s:
+    extraArgs:
+      # Disable Traefik to save memory; KServe will handle ingress
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+      # Disable metrics-server to save memory (we install kube-prometheus-stack instead)
+      - arg: --disable=metrics-server
+        nodeFilters:
+          - server:*
+      # Disable servicelb to save memory (we use NodePort or lightweight ingress)
+      - arg: --disable=servicelb
+        nodeFilters:
+          - server:*
+  runtime:
+    labels:
+      - label: workload-type=llm-serving
+        nodeFilters:
+          - server:*
+          - agent:*
+ports:
+  # Expose k3s API server on host for kubectl
+  - port: 6443:6443
+    nodeFilters:
+      - server:*
