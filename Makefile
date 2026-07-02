@@ -23,12 +23,14 @@ vm-down:
 
 vm-delete:
 	@echo "Deleting Colima VM..."
-	colima delete --profile $(VM_PROFILE)
+	colima delete --profile $(VM_PROFILE) --force || true
 
 # --- Cluster lifecycle ---
 
 cluster-create:
 	@echo "Creating k3d cluster '$(CLUSTER_NAME)' (1 server, 1 agent, Traefik disabled)..."
+	# Ensure any stale cluster record is cleaned up first
+	-k3d cluster delete $(CLUSTER_NAME) >/dev/null 2>&1 || true
 	k3d cluster create $(CLUSTER_NAME) \
 		--servers 1 \
 		--agents 1 \
@@ -44,7 +46,9 @@ cluster-create:
 
 cluster-delete:
 	@echo "Deleting k3d cluster '$(CLUSTER_NAME)'..."
-	k3d cluster delete $(CLUSTER_NAME)
+	-k3d cluster delete $(CLUSTER_NAME) || true
+	@echo "Pruning any leftover k3d networks/volumes..."
+	-docker network rm k3d-$(CLUSTER_NAME) >/dev/null 2>&1 || true
 
 # --- Bootstrap / Teardown ---
 
