@@ -1,0 +1,41 @@
+# KServe Helm values
+# Pinned version: v0.18.0
+# RawDeployment mode (called "Standard" in KServe v0.18+)
+# Minimal install for 11GB VM budget
+
+kserve:
+  controller:
+    # RawDeployment mode (Standard in KServe v0.18+)
+    deploymentMode: Standard
+    
+    # Gateway configuration for k3d (NodePort-based)
+    gateway:
+      ingressGateway:
+        enableGatewayApi: false
+        kserveGateway: kserve/kserve-ingress-gateway
+      localGateway:
+        gatewayService: kserve-local-gateway.kserve.svc.cluster.local
+        gatewayNamespace: kserve
+    
+    # Resource limits tuned for laptop
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    
+    # Reduce replicas
+    replicaCount: 1
+
+  # Modelmesh is too heavy for this setup
+  modelmesh:
+    enabled: false
+  
+  # Disable other heavy components
+  localmodel:
+    enabled: false
+  
+  # Don't create shared resources if they already exist
+  createSharedResources: true

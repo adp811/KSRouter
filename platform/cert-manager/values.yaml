@@ -1,0 +1,54 @@
+# cert-manager Helm values
+# Pinned version: v1.20.3
+# Minimal install for 11GB VM budget
+
+crds:
+  enabled: true
+
+# Reduce replicas to save memory
+replicaCount: 1
+
+# Resource limits tuned for laptop deployment
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Disable Prometheus metrics to save resources
+prometheus:
+  enabled: false
+
+# Webhook resources
+webhook:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# CA injector resources
+cainjector:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Startup API check resources
+startupapicheck:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
