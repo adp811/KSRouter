@@ -58,20 +58,62 @@ bootstrap: vm-up cluster-create
 teardown: cluster-delete vm-delete
 	@echo "Teardown complete."
 
-# --- Platform install stubs (filled in later phases) ---
+# --- Platform install ---
 
-install-platform:
-	@echo "Installing platform components (KServe, cert-manager, monitoring, KEDA)..."
-	@echo "See platform/ directory for Helm values and manifests."
+install-cert-manager:
+	@echo "Installing cert-manager v1.20.3..."
+	helm install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+		--version v1.20.3 \
+		--namespace cert-manager \
+		--create-namespace \
+		--values platform/cert-manager/values.yaml \
+		--wait
 
-# --- Model deployment stubs (filled in Phase 2+) ---
+install-kserve:
+	@echo "Installing KServe v0.18.0 (Standard/RawDeployment mode)..."
+	helm install kserve-crd oci://ghcr.io/kserve/charts/kserve-crd \
+		--version v0.18.0 \
+		--namespace kserve \
+		--create-namespace \
+		--wait
+	helm install kserve-resources oci://ghcr.io/kserve/charts/kserve-resources \
+		--version v0.18.0 \
+		--namespace kserve \
+		--values platform/kserve/values.yaml \
+		--wait
+	helm install kserve-runtime-configs oci://ghcr.io/kserve/charts/kserve-runtime-configs \
+		--version v0.18.0 \
+		--namespace kserve \
+		--wait
+	kubectl apply -f platform/kserve/clusterservingruntimes.yaml
+	kubectl apply -f runtime/clusterservingruntime.yaml
 
-deploy-models:
+install-platform: install-cert-manager install-kserve
+	@echo "Platform installation complete."
+
+# --- Model deployment ---
+
+copy-models-to-nodes:
+	@echo "Copying GGUF models to k3d nodes..."
+	# Copy to server node
+	docker exec k3d-$(CLUSTER_NAME)-server-0 mkdir -p /mnt/models || true
+	docker cp models/gguf/. k3d-$(CLUSTER_NAME)-server-0:/mnt/models/
+	# Copy to agent node
+	docker exec k3d-$(CLUSTER_NAME)-agent-0 mkdir -p /mnt/models || true
+	docker cp models/gguf/. k3d-$(CLUSTER_NAME)-agent-0:/mnt/models/
+
+deploy-models: copy-models-to-nodes
 	@echo "Deploying model InferenceServices..."
-	@echo "See models/ directory for manifests."
+	kubectl apply -f models/qwen-0_5b.yaml
 
 deploy-all: install-platform deploy-models
 	@echo "All components deployed."
+
+# --- Testing ---
+
+test:
+	@echo "Running smoke tests..."
+	@echo "See test scripts in individual component directories."
 
 # --- Testing ---
 

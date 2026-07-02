@@ -32,3 +32,7 @@ kubeconfig
 *.key
 .env
 secrets/
+
+# Model files (downloaded via script, verified by SHA256)
+models/gguf/
+*.gguf
