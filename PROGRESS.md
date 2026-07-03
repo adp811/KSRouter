@@ -775,5 +775,32 @@ decisions. Found several real bugs and gaps; fixed all of them.
 
 - `fix: Phase 11 - full implementation audit fixes (KEDA gaps, httpx exception bugs, request-id race, metric accuracy, dead code cleanup)`
 
+### Post-Phase-11 correction
+
+`make bootstrap` failed immediately after this phase's `cluster-create` change:
+the Phase 11 validation of `cluster/k3d-config.yaml` only checked that it was
+*parseable* YAML, not that it matched k3d v5.9.0's actual config schema.
+Running it for real surfaced two schema errors:
+
+```
+FATA[0000] Schema Validation failed for config file cluster/k3d-config.yaml:
+- (root): Additional property name is not allowed
+- kind: kind must be one of the following: "Simple"
+```
+
+k3d v5.9.0's `SimpleConfig` schema requires `kind: Simple` (not `SimpleConfig`)
+and the cluster name nested under `metadata.name` (not a top-level `name`
+field). Fixed `cluster/k3d-config.yaml` accordingly and verified with a real
+`make cluster-create` run (cluster created, both nodes `Ready`, CoreDNS fix
+applied successfully).
+
+**Lesson:** "valid YAML" and "valid against the tool's schema" are different
+checks — the latter requires either the tool itself or its published JSON
+schema, not just a generic parser.
+
+### Commits
+
+- `fix: correct k3d SimpleConfig schema (kind: Simple, metadata.name) in cluster/k3d-config.yaml`
+
 ---
 

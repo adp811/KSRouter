@@ -2,8 +2,9 @@
 # 1 server, 1 agent, Traefik disabled (we use KServe's ingress via NodePort)
 
 apiVersion: k3d.io/v1alpha5
-kind: SimpleConfig
-name: llm-serving
+kind: Simple
+metadata:
+  name: llm-serving
 servers: 1
 agents: 1
 options:
