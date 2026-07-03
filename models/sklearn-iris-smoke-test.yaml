@@ -1,3 +1,12 @@
+# Manual smoke test for the generic `kserve-sklearnserver` ClusterServingRuntime
+# (platform/kserve/clusterservingruntimes.yaml), independent of the 3-tier LLM
+# stack. Not part of `make test`; apply/delete manually when validating the
+# KServe/sklearn runtime install itself, e.g.:
+#   kubectl apply -f models/sklearn-iris-smoke-test.yaml
+#   kubectl port-forward svc/sklearn-iris-predictor -n default 8081:80
+#   curl -s http://localhost:8081/v1/models/sklearn-iris:predict \
+#     -H "Content-Type: application/json" -d '{"instances": [[5.1, 3.5, 1.4, 0.2]]}'
+#   kubectl delete -f models/sklearn-iris-smoke-test.yaml
 apiVersion: "serving.kserve.io/v1beta1"
 kind: "InferenceService"
 metadata:

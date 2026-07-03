@@ -654,3 +654,126 @@ Document the entire project for human contributors (README.md) and for future co
 
 ---
 
+## Phase 11 — Full implementation audit and fixes
+
+**Status:** COMPLETED ✅
+
+**Date:** 2026-07-03
+
+### Objective
+
+Full correctness audit of the entire implementation (router code, KServe/KEDA
+manifests, Makefile, scripts, eval tooling) against AGENTS.md's architecture
+decisions. Found several real bugs and gaps; fixed all of them.
+
+### Issues Found & Fixed
+
+1. **Medium tier (llama-1b) had no KEDA autoscaling at all.** No `ScaledObject`
+   existed for it, and `models/llama-1b.yaml` had no `minReplicas`/`maxReplicas`.
+   It was stuck at a static replica count with nothing managing it, violating
+   the "KEDA + external autoscalerClass for all tiers" decision.
+   **Fix:** added `minReplicas: 1` / `maxReplicas: 2` to `models/llama-1b.yaml`,
+   created `models/llama-1b-scaledobject.yaml` (tier-specific
+   `router_recent_requests_by_tier{tier="medium"}` trigger), and wired it into
+   `make apply-scaledobjects`.
+
+2. **Small-tier ScaledObject used the wrong metric.** It queried
+   `sum(router_recent_requests)` — the *global* request gauge across all
+   tiers — instead of the tier-specific gauge the large-tier scaler correctly
+   uses, so non-small-tier traffic could scale up the small model needlessly.
+   **Fix:** changed the query to `sum(router_recent_requests_by_tier{tier="small"})`.
+
+3. **No validation of the `x-route-tier` header.** An invalid value caused an
+   unhandled `KeyError` (raw 500) instead of a clean error.
+   **Fix:** validate and lowercase the header in `router/src/main.py`; return
+   `400` with a helpful message for unknown tiers.
+
+4. **Wrong exception type in the classifier timeout handler, and the same bug
+   in the upstream timeout handler.** Code used `except asyncio.TimeoutError`
+   (routing.py) and `except httpx.TimeoutError` (main.py) — neither is a real
+   httpx exception in the pinned httpx 0.28.1 (the correct class is
+   `httpx.TimeoutException`). `httpx.TimeoutError` doesn't exist at all in
+   this httpx version, so a real upstream timeout would crash with
+   `AttributeError` instead of returning the intended 504. Verified by
+   mocking a real `httpx.ReadTimeout` through the full FastAPI app before and
+   after the fix.
+   **Fix:** changed both to `except httpx.TimeoutException`. Also fixed the
+   corresponding unit test, which previously mocked `post` to just
+   `asyncio.sleep(10)` and return `None` — it never actually exercised the
+   timeout branch (it hit the generic `except Exception` via an
+   `AttributeError` on `None.raise_for_status()`) and added ~10s of dead time
+   to every test run. Test suite dropped from 10.3s to 0.84s and now uses a
+   real `httpx.ReadTimeout`/`ConnectError` to exercise both branches.
+
+5. **Request ID propagation was not concurrency-safe.**
+   `RequestIdMiddleware` mutated an attribute directly on the shared
+   module-level `logging.Logger` instance, which is a race condition under
+   concurrent async requests.
+   **Fix:** introduced a `contextvars.ContextVar` in `logging_config.py`
+   (`request_id_ctx_var`), set per-request in the middleware and read by
+   `RequestIdFilter`. Verified task-level isolation under concurrent
+   `asyncio.gather`.
+
+6. **TTFT metric measured time to the first SSE frame, not first token.**
+   OpenAI-style streams typically send an initial role-announcement frame
+   with empty `delta.content` before real tokens; the old code recorded TTFT
+   on any chunk with `choices`, understating real generation latency.
+   **Fix:** TTFT is now recorded on the first chunk with non-empty
+   `delta.content`.
+
+7. **`evals/canary_eval.py` validation was a no-op** — both the in-tolerance
+   and out-of-tolerance branches returned `True`, so the eval could never
+   actually fail on a broken canary split.
+   **Fix:** out-of-tolerance now returns `False` (and the script exits 1).
+
+8. **`evals/chaos_test.py`** referenced `urllib.error.HTTPError` without
+   importing `urllib.error` (it worked only because `urllib.request`
+   transitively imports it). **Fix:** added the explicit import.
+
+9. **Dead/unused files removed:** `runtime/servingruntime.yaml` (superseded by
+   `runtime/clusterservingruntime.yaml` per the Phase 2 fix, never applied by
+   the Makefile, hardcoded a specific model path) and
+   `platform/keda/triggerauthentication.yaml` (never applied, not referenced
+   by any `ScaledObject`).
+
+10. **`cluster/k3d-config.yaml` was unused** — the Makefile built the cluster
+    via raw `k3d cluster create` flags instead of this config file, so the two
+    could silently drift. Since `fix-dns.sh` and other scripts already
+    hardcode the `llm-serving` cluster name regardless of `$(CLUSTER_NAME)`,
+    using the declarative config is no less flexible in practice.
+    **Fix:** `cluster-create` now runs `k3d cluster create --config
+    cluster/k3d-config.yaml` (documented the `CLUSTER_NAME` caveat inline).
+
+11. **`models/sklearn-iris-smoke-test.yaml`** was an orphaned Phase 1 artifact
+    not referenced anywhere. **Fix:** left in place but documented as a manual
+    smoke test for the generic sklearn runtime, with usage instructions
+    inline.
+
+### Verification
+
+- `pytest router/tests/` — 15/15 passed in 0.84s (previously 14/14 in 10.3s,
+  with one test not actually testing what it claimed to).
+- Manually verified via `TestClient` (mocking httpx at the transport level):
+  invalid `x-route-tier` → clean `400`; valid case-insensitive tier (`LARGE`)
+  → normalized and routed; simulated `httpx.ReadTimeout` → graceful `504`
+  (previously would have crashed with `AttributeError`).
+  Manually verified `contextvars`-based request ID isolation under concurrent
+  `asyncio.gather`.
+- All modified/added YAML validated with a YAML parser.
+
+### Files Added/Modified
+
+- `models/llama-1b.yaml`, `models/llama-1b-scaledobject.yaml` (new),
+  `models/qwen-0-5b-scaledobject.yaml`, `models/sklearn-iris-smoke-test.yaml`
+- `Makefile`, `README.md`
+- `router/src/main.py`, `router/src/routing.py`, `router/src/logging_config.py`
+- `router/pytest.ini`, `router/tests/test_routing.py`
+- `evals/canary_eval.py`, `evals/chaos_test.py`
+- Removed: `runtime/servingruntime.yaml`, `platform/keda/triggerauthentication.yaml`
+
+### Commits
+
+- `fix: Phase 11 - full implementation audit fixes (KEDA gaps, httpx exception bugs, request-id race, metric accuracy, dead code cleanup)`
+
+---
+

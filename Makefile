@@ -31,15 +31,11 @@ vm-delete:
 
 cluster-create:
 	@echo "Creating k3d cluster '$(CLUSTER_NAME)' (1 server, 1 agent, Traefik disabled)..."
+	# NOTE: cluster/k3d-config.yaml hardcodes name "llm-serving". If you override
+	# CLUSTER_NAME on the command line, update that file's `name:` field too.
 	# Ensure any stale cluster record is cleaned up first
 	-k3d cluster delete $(CLUSTER_NAME) >/dev/null 2>&1 || true
-	k3d cluster create $(CLUSTER_NAME) \
-		--servers 1 \
-		--agents 1 \
-		--k3s-arg "--disable=traefik@server:*" \
-		--k3s-arg "--disable=metrics-server@server:*" \
-		--k3s-arg "--disable=servicelb@server:*" \
-		--port "6443:6443@server:*"
+	k3d cluster create --config cluster/k3d-config.yaml
 	@echo "Fixing kubeconfig port to 6443..."
 	# k3d sometimes writes a random LB port; force it to 6443
 	sed -i '' 's/0\.0\.0\.0:[0-9]*/0.0.0.0:6443/g' $(KUBECONFIG_PATH) || true
@@ -145,6 +141,7 @@ deploy-models: copy-models-to-nodes
 apply-scaledobjects:
 	@echo "Applying KEDA ScaledObjects..."
 	kubectl apply -f models/qwen-0-5b-scaledobject.yaml
+	kubectl apply -f models/llama-1b-scaledobject.yaml
 	kubectl apply -f models/qwen-3b-scaledobject.yaml
 
 build-router:

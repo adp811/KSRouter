@@ -11,6 +11,7 @@ from fastapi import FastAPI, Header, Request, Response
 from fastapi.responses import StreamingResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from .logging_config import request_id_ctx_var
 from .metrics import (
     upstream_latency_seconds,
     upstream_errors_total,
@@ -52,18 +53,19 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
         request.state.request_id = request_id
-        
-        # Set request_id on logger adapter
-        old_request_id = getattr(logger, "request_id", None)
-        logger.request_id = request_id
-        
-        response = await call_next(request)
-        response.headers["x-request-id"] = request_id
-        
-        if old_request_id:
-            logger.request_id = old_request_id
-        
-        return response
+
+        # Bind request_id to this request's context. Using a ContextVar
+        # (rather than mutating an attribute on the shared module-level
+        # logger) keeps this safe under concurrent requests, since each
+        # request is handled in its own asyncio Task with its own copy of
+        # the context.
+        token = request_id_ctx_var.set(request_id)
+        try:
+            response = await call_next(request)
+            response.headers["x-request-id"] = request_id
+            return response
+        finally:
+            request_id_ctx_var.reset(token)
 
 
 app.add_middleware(RequestIdMiddleware)
@@ -93,7 +95,22 @@ async def chat_completions(
     x_route_tier: Optional[str] = Header(None, alias="x-route-tier")
 ):
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
-    
+
+    # Validate explicit tier override before doing any work. An invalid value
+    # here would otherwise cause a KeyError (unhandled 500) further down when
+    # looking up MODEL_ENDPOINTS[tier].
+    if x_route_tier is not None:
+        x_route_tier = x_route_tier.strip().lower()
+        if x_route_tier not in MODEL_ENDPOINTS:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "Invalid x-route-tier header",
+                    "message": f"'{x_route_tier}' is not a valid tier. Must be one of: {sorted(MODEL_ENDPOINTS.keys())}",
+                    "request_id": request_id,
+                }
+            )
+
     body = await request.json()
     messages = body.get("messages", [])
     
@@ -161,7 +178,7 @@ async def chat_completions(
                 status_code=502,
                 content={"error": "Upstream connect error", "request_id": request_id}
             )
-    except httpx.TimeoutError:
+    except httpx.TimeoutException:
         upstream_errors_total.labels(tier=tier, error_type="timeout").inc()
         logger.error("Upstream timeout", extra={"request_id": request_id, "tier": tier})
         return JSONResponse(
@@ -215,7 +232,7 @@ async def stream_response(
 ) -> StreamingResponse:
     
     async def event_generator() -> AsyncIterator[str]:
-        first_token = True
+        first_content_token = True
         token_start = time.time()
         
         async with client.stream(
@@ -236,24 +253,34 @@ async def stream_response(
                     
                     try:
                         data = json.loads(data_str)
-                        
-                        # Record TTFT
-                        if first_token and data.get("choices"):
-                            first_token = False
+
+                        has_content = bool(
+                            data.get("choices")
+                            and data["choices"][0].get("delta", {}).get("content")
+                        )
+
+                        # Record TTFT against the first chunk that carries
+                        # actual generated content. The first SSE chunk from
+                        # most OpenAI-style servers is a role-announcement
+                        # frame (delta={"role": "assistant"}) with no content,
+                        # so gating on "choices present" alone would measure
+                        # connection/queue time rather than true generation
+                        # latency.
+                        if first_content_token and has_content:
+                            first_content_token = False
                             ttft = time.time() - token_start
                             time_to_first_token_seconds.labels(tier=tier).observe(ttft)
                         
                         # Count tokens
-                        if data.get("choices") and data["choices"][0].get("delta", {}).get("content"):
+                        if has_content:
                             tokens_streamed_total.labels(tier=tier).inc()
                         
-                        # Add router metadata to first chunk
-                        if data.get("choices") and first_token is False:
-                            if "router_metadata" not in data:
-                                data["router_metadata"] = {
-                                    "tier": tier,
-                                    "request_id": request_id,
-                                }
+                        # Add router metadata to any chunk that carries choices
+                        if data.get("choices") and "router_metadata" not in data:
+                            data["router_metadata"] = {
+                                "tier": tier,
+                                "request_id": request_id,
+                            }
                         
                         yield f"data: {json.dumps(data)}\n\n"
                         

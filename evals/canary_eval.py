@@ -126,9 +126,8 @@ def run_stage(host: str, port: int, weight: int, num_requests: int = 50):
             print(f"  ✅ PASS: Canary split within {tolerance}% of {expected}%")
             return True
         else:
-            print(f"  ⚠️  WARN: Canary split {actual_canary_pct:.1f}% differs from expected {expected}% by >{tolerance}%")
-            # Don't fail - small sample variance is normal
-            return True
+            print(f"  ❌ FAIL: Canary split {actual_canary_pct:.1f}% differs from expected {expected}% by >{tolerance}%")
+            return False
     else:
         print("  ⚠️  No metrics found - checking if canary is configured...")
         return False

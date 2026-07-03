@@ -145,7 +145,7 @@ async def classifier_route(prompt: str, timeout: float = 2.0) -> Optional[str]:
             else:
                 return None
                 
-    except asyncio.TimeoutError:
+    except httpx.TimeoutException:
         logger.warning("Classifier timeout, falling back to heuristic")
         fallback_count_total.labels(reason="timeout").inc()
         return None

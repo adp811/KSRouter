@@ -1,13 +1,13 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: qwen-0-5b-scaler
+  name: llama-1b-scaler
   namespace: default
 spec:
   scaleTargetRef:
-    name: qwen-0-5b-predictor
+    name: llama-1b-predictor
   minReplicaCount: 1
-  maxReplicaCount: 3
+  maxReplicaCount: 2
   pollingInterval: 15
   cooldownPeriod: 60
   advanced:
@@ -29,7 +29,7 @@ spec:
   - type: prometheus
     metadata:
       serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
-      metricName: router_small_tier_requests_total
+      metricName: router_medium_tier_requests_total
       threshold: "10"
       query: |
-        sum(router_recent_requests_by_tier{tier="small"})
+        sum(router_recent_requests_by_tier{tier="medium"})

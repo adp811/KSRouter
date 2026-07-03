@@ -57,16 +57,35 @@ class TestClassifierRouting:
     
     @pytest.mark.asyncio
     async def test_classifier_timeout_fallback(self, monkeypatch):
-        """Test that classifier falls back to heuristic on timeout."""
+        """Test that classifier falls back to heuristic when httpx raises a timeout.
+
+        This mocks `post` to raise the same exception type httpx actually
+        raises when a request exceeds its configured timeout
+        (`httpx.TimeoutError` and subclasses such as `ReadTimeout`), rather
+        than sleeping in real time, so the test is both fast and exercises
+        the real `except httpx.TimeoutError` branch in `classifier_route`.
+        """
         import httpx
-        
+
         async def mock_post(*args, **kwargs):
-            await asyncio.sleep(10)  # Simulate timeout
-            return None
-        
+            raise httpx.ReadTimeout("simulated timeout", request=None)
+
         monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
-        
+
         result = await classifier_route("What is 2+2?", timeout=0.001)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_classifier_generic_error_fallback(self, monkeypatch):
+        """Test that classifier falls back to heuristic on non-timeout errors too."""
+        import httpx
+
+        async def mock_post(*args, **kwargs):
+            raise httpx.ConnectError("simulated connection error", request=None)
+
+        monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+
+        result = await classifier_route("What is 2+2?", timeout=2.0)
         assert result is None
 
 

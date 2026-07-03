@@ -218,8 +218,9 @@ A FastAPI service that routes requests to the appropriate model tier based on pr
 │   ├── qwen-0_5b.yaml                # Small InferenceService
 │   ├── llama-1b.yaml                 # Medium InferenceService
 │   ├── qwen-3b.yaml                  # Large InferenceService
-│   ├── qwen-0-5b-scaledobject.yaml   # KEDA autoscaling config
-│   └── qwen-3b-scaledobject.yaml
+│   ├── qwen-0-5b-scaledobject.yaml   # KEDA autoscaling config (small)
+│   ├── llama-1b-scaledobject.yaml    # KEDA autoscaling config (medium)
+│   └── qwen-3b-scaledobject.yaml     # KEDA autoscaling config (large)
 ├── observability/                    # Prometheus + Grafana config
 │   ├── podmonitor-llm-models.yaml
 │   ├── prometheusrules.yaml
