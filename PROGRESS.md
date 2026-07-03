@@ -804,3 +804,66 @@ schema, not just a generic parser.
 
 ---
 
+## Phase 12 — `install-monitoring` ordering bug + missing Helm version pins
+
+**Status:** COMPLETED ✅
+
+**Date:** 2026-07-03
+
+### Issue 1: `make install-monitoring` timed out on Grafana
+
+Running the actual command against a live cluster failed:
+
+```
+Error: INSTALLATION FAILED: resource Deployment/monitoring/kube-prometheus-stack-grafana
+not ready. status: InProgress, message: Available: 0/1
+context deadline exceeded
+```
+
+`kubectl describe pod` on the stuck Grafana pod showed the real cause:
+
+```
+Warning  FailedMount  (x13 over 12m)  kubelet  MountVolume.SetUp failed for volume
+"dashboards-default": configmap "grafana-dashboards-llm" not found
+```
+
+`platform/monitoring/values.yaml` configures Grafana (`dashboardsConfigMaps.default:
+grafana-dashboards-llm`) to mount a ConfigMap that `Makefile`'s `install-monitoring`
+target only applied via `kubectl apply` **after** the blocking
+`helm install --wait --timeout 10m` call — a chicken-and-egg ordering bug. The
+Grafana pod could never become Ready, so `--wait` always timed out and the
+release ended up `failed`.
+
+This is the same failure mode Phase 3 originally documented and claimed to have
+fixed ("created placeholder ConfigMap before Helm install..."), but the actual
+fix was never reflected in the Makefile — Phase 11's audit didn't catch it
+either, since that audit never exercised a live `make deploy-all`.
+
+**Fix:** `install-monitoring` now creates the `monitoring` namespace and applies
+`observability/grafana-configmap.yaml` *before* the `helm install` call.
+Verified live: uninstalled the stuck release, reran `make install-monitoring`,
+Grafana reached `3/3 Running` within ~1 minute.
+
+### Issue 2: `kube-prometheus-stack` and `keda` Helm installs had no pinned version
+
+Unlike `install-cert-manager`/`install-kserve` (which pin `--version` explicitly),
+`install-monitoring` and `install-keda` installed whatever the chart repo
+considered "latest" at `helm repo update` time — inconsistent with AGENTS.md's
+own stated convention ("Versions: All pinned... No `:latest` tags") and not
+actually reproducible run-to-run.
+
+**Fix:** pinned `--version 87.6.0` (kube-prometheus-stack, app v0.92.1 — matches
+what was already installed/documented) and `--version 2.20.0` (KEDA, matching
+the version already documented everywhere else in the repo). Verified live:
+reinstalled both releases with the pins; `helm list -A` now shows explicit
+chart versions for all 5 releases (`cert-manager-v1.20.3`, `kserve-crd-v0.18.0`,
+`kserve-resources-v0.18.0`, `kserve-runtime-configs-v0.18.0`,
+`kube-prometheus-stack-87.6.0`, `keda-2.20.0`), and all pods in `monitoring`
+and `keda` namespaces are `Running`.
+
+### Commits
+
+- `fix: Phase 12 - fix install-monitoring ConfigMap ordering and pin kube-prometheus-stack/KEDA Helm versions`
+
+---
+

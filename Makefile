@@ -93,10 +93,18 @@ install-kserve:
 	kubectl apply -f runtime/clusterservingruntime.yaml
 
 install-monitoring:
-	@echo "Installing kube-prometheus-stack (trimmed)..."
+	@echo "Installing kube-prometheus-stack v87.6.0 (app v0.92.1, trimmed)..."
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
 	helm repo update
+	# The Grafana pod (via platform/monitoring/values.yaml's dashboardsConfigMaps)
+	# mounts the "grafana-dashboards-llm" ConfigMap at pod startup. It must exist
+	# *before* `helm install --wait` runs, otherwise the pod can never reach
+	# Ready (FailedMount) and the --wait times out. Ensure the namespace exists
+	# first since --create-namespace hasn't run yet at this point.
+	kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f observability/grafana-configmap.yaml
 	helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+		--version 87.6.0 \
 		--namespace monitoring \
 		--create-namespace \
 		--values platform/monitoring/values.yaml \
@@ -105,13 +113,13 @@ install-monitoring:
 	@echo "Applying observability manifests..."
 	kubectl apply -f observability/podmonitor-llm-models.yaml
 	kubectl apply -f observability/prometheusrules.yaml
-	kubectl apply -f observability/grafana-configmap.yaml
 
 install-keda:
 	@echo "Installing KEDA v2.20.0..."
 	helm repo add kedacore https://kedacore.github.io/charts || true
 	helm repo update
 	helm install keda kedacore/keda \
+		--version 2.20.0 \
 		--namespace keda \
 		--create-namespace \
 		--values platform/keda/values.yaml \
