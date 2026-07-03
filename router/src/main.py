@@ -45,7 +45,7 @@ async def update_recent_requests(tier: Optional[str] = None):
 
 logger = logging.getLogger("router")
 
-app = FastAPI(title="LLM Semantic Router", version="1.0.0")
+app = FastAPI(title="KSRouter", version="1.0.0")
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

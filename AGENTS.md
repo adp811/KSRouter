@@ -1,6 +1,6 @@
 # AGENTS.md — Project Context for Coding Agents
 
-## Project: Laptop-Scale LLM Serving Platform
+## Project: KSRouter
 
 ## Quick Reference
 

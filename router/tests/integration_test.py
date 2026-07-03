@@ -86,7 +86,7 @@ async def test_single_prompt(client: httpx.AsyncClient, prompt: str, expected_ti
 
 async def main():
     print("=" * 60)
-    print("LLM Semantic Router - Integration Test")
+    print("KSRouter - Integration Test")
     print("=" * 60)
     print(f"Router URL: {ROUTER_URL}")
     print(f"Total prompts: {len(CORPUS)}")

@@ -3,7 +3,7 @@
 .PHONY: deploy-models deploy-router apply-scaledobjects deploy-all test
 .PHONY: vm-memory cluster-status
 
-# Laptop-Scale LLM Serving Platform
+# KSRouter — KServe RawDeployment LLM Router
 # Host: macOS Apple Silicon (M3 Pro), 18GB unified memory
 # VM: Colima 11GB/6CPU/VZ, k3d cluster (1 server + 1 agent)
 

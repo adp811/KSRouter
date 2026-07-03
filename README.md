@@ -1,6 +1,8 @@
-# Laptop-Scale LLM Serving Platform
+# KSRouter
 
 A Kubernetes-native LLM serving platform built for a single laptop (M3 Pro, 18GB unified memory). Runs three tiers of models — small (0.5B), medium (1B), and large (3B) — with a semantic router, KEDA autoscaling, Prometheus/Grafana observability, and canary traffic splitting.
+
+**CLI name:** `ksrouter`
 
 ## Architecture
 
@@ -12,7 +14,7 @@ A Kubernetes-native LLM serving platform built for a single laptop (M3 Pro, 18GB
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Semantic Router (FastAPI)                │
+│                     KSRouter (FastAPI)                     │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
 │  │  Heuristic   │→│  Classifier  │→│  Canary Split    │  │
 │  │  Routing     │  │  (0.5B LLM)  │  │  (10%→50%→100%) │  │
@@ -99,7 +101,7 @@ All models are GGUF format served by `llama.cpp` server via KServe InferenceServ
 
 **Model delivery:** Pre-downloaded GGUF files are copied to k3d nodes via `docker cp` at `/mnt/models`, then mounted via `hostPath` volumes. No in-cluster downloads.
 
-### 2. Semantic Router
+### 2. KSRouter
 
 A FastAPI service that routes requests to the appropriate model tier based on prompt complexity.
 

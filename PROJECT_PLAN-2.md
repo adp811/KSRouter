@@ -1,4 +1,4 @@
-# Project: Laptop-Scale LLM Serving Platform on KServe
+# Project: KSRouter — Laptop-Scale LLM Serving Platform on KServe
 
 A production-pattern LLM inference platform running entirely on a MacBook M3 Pro (18GB unified memory), demonstrating frontier AI infrastructure skills: KServe custom runtimes, semantic request routing, metrics-driven autoscaling, canary rollouts with automated eval-based promotion, and full observability.
 
