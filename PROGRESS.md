@@ -608,3 +608,49 @@ Swap:              0           0           0
 
 ---
 
+## Phase 10 — Final documentation and README
+
+**Status:** COMPLETED ✅
+
+**Date:** 2026-07-02
+
+### Objective
+
+Document the entire project for human contributors (README.md) and for future coding agents (AGENTS.md). Ensure all architecture decisions, gotchas, and conventions are captured.
+
+### Deliverables
+
+| Document | Audience | Contents |
+|---|---|---|
+| `README.md` | Human contributors | Project overview, quick start, architecture, performance metrics, component details, project structure, known limitations, troubleshooting |
+| `AGENTS.md` | Coding agents | Architecture decisions, common pitfalls (CoreDNS, KEDA fighting, helm timeouts, image pull, memory pressure), testing checklist, file conventions, evaluation scripts reference |
+
+### README.md Highlights
+
+- **Architecture diagram:** Text-based showing client → router → three model tiers + monitoring
+- **Technology stack table:** All components with versions and purposes
+- **One-command quick start:** `make bootstrap && make deploy-all`
+- **Performance tables:** Latency by tier, cold-start breakdown, router overhead, KEDA scaling behavior, VM memory budget
+- **Project structure tree:** All files with one-line descriptions
+- **Known limitations:** Honest assessment of single-node, no-GPU, KEDA latency, etc.
+
+### AGENTS.md Highlights
+
+- **Architecture decisions (immutable):** 6 rules that must not be changed without discussion (RawDeployment, HostPath, KEDA+external, sliding-window gauge, router-side canary, classifier-only-for-long-prompts)
+- **Common pitfalls with fixes:** CoreDNS, KEDA fighting, helm timeouts, image pull, memory pressure
+- **Testing checklist:** Pre-commit verification steps
+- **File conventions:** YAML, Python, commits, versions
+- **Evaluation scripts:** 3 scripts with expected runtime
+
+### Files Added/Modified
+
+- `README.md` — new comprehensive project documentation
+- `AGENTS.md` — updated with latest findings from Phase 5-9
+- `PROGRESS.md` — Phase 10 documentation
+
+### Commits
+
+- `docs: Phase 10 - comprehensive README.md and AGENTS.md documentation`
+
+---
+
