@@ -592,18 +592,19 @@ Swap:              0           0           0
 
 ### Makefile Gaps Identified
 
-1. **KEDA not in `make deploy-all`:** Need to add `install-keda` target and include it in `deploy-all`
-2. **CoreDNS DNS fix not automated:** The `192.168.5.1` forward patch requires manual execution. Could be added to `make bootstrap` or `make install-platform`
-3. **Helm timeouts:** Default `--wait` timeouts are too short for slow image pulls. Should add `--timeout 10m` to all helm installs
+1. **KEDA not in `make deploy-all`:** ✅ Fixed — added `install-keda` target and `apply-scaledobjects` target, included in `deploy-all`
+2. **CoreDNS DNS fix not automated:** ✅ Fixed — added `scripts/fix-dns.sh` which patches CoreDNS ConfigMap while preserving both `Corefile` and `NodeHosts` keys; integrated into `cluster-create` target
+3. **Helm timeouts:** ✅ Fixed — added `--timeout 10m` to all `helm install` commands
 
 ### Files Added/Modified
 
-- `Makefile` — no changes needed for this phase (gaps documented for future fix)
-- `PROGRESS.md` — Phase 9 documentation
+- `Makefile` — added `install-keda`, `apply-scaledobjects`, `--timeout 10m` to all helm installs, `fix-dns.sh` integration
+- `scripts/fix-dns.sh` — new script to safely patch CoreDNS ConfigMap with both keys preserved
 
 ### Commits
 
 - `feat: Phase 9 - clean-room teardown and bootstrap verification with full end-to-end test`
+- `fix: Makefile improvements from Phase 9 clean-room verification — add KEDA, DNS fix, helm timeouts`
 
 ---
 
