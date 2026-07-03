@@ -1,5 +1,7 @@
 .PHONY: vm-up vm-down cluster-create cluster-delete bootstrap teardown
-.PHONY: deploy-models deploy-all test
+.PHONY: fix-dns install-cert-manager install-kserve install-monitoring install-keda install-platform
+.PHONY: deploy-models deploy-router apply-scaledobjects deploy-all test
+.PHONY: vm-memory cluster-status
 
 # Laptop-Scale LLM Serving Platform
 # Host: macOS Apple Silicon (M3 Pro), 18GB unified memory
@@ -43,6 +45,8 @@ cluster-create:
 	sed -i '' 's/0\.0\.0\.0:[0-9]*/0.0.0.0:6443/g' $(KUBECONFIG_PATH) || true
 	@echo "Cluster nodes:"
 	kubectl get nodes
+	@echo "Fixing CoreDNS for external DNS resolution..."
+	./scripts/fix-dns.sh
 
 cluster-delete:
 	@echo "Deleting k3d cluster '$(CLUSTER_NAME)'..."
@@ -67,7 +71,8 @@ install-cert-manager:
 		--namespace cert-manager \
 		--create-namespace \
 		--values platform/cert-manager/values.yaml \
-		--wait
+		--wait \
+		--timeout 10m
 
 install-kserve:
 	@echo "Installing KServe v0.18.0 (Standard/RawDeployment mode)..."
@@ -75,16 +80,19 @@ install-kserve:
 		--version v0.18.0 \
 		--namespace kserve \
 		--create-namespace \
-		--wait
+		--wait \
+		--timeout 10m
 	helm install kserve-resources oci://ghcr.io/kserve/charts/kserve-resources \
 		--version v0.18.0 \
 		--namespace kserve \
 		--values platform/kserve/values.yaml \
-		--wait
+		--wait \
+		--timeout 10m
 	helm install kserve-runtime-configs oci://ghcr.io/kserve/charts/kserve-runtime-configs \
 		--version v0.18.0 \
 		--namespace kserve \
-		--wait
+		--wait \
+		--timeout 10m
 	kubectl apply -f platform/kserve/clusterservingruntimes.yaml
 	kubectl apply -f runtime/clusterservingruntime.yaml
 
@@ -96,13 +104,25 @@ install-monitoring:
 		--namespace monitoring \
 		--create-namespace \
 		--values platform/monitoring/values.yaml \
-		--wait || true
+		--wait \
+		--timeout 10m
 	@echo "Applying observability manifests..."
 	kubectl apply -f observability/podmonitor-llm-models.yaml
 	kubectl apply -f observability/prometheusrules.yaml
 	kubectl apply -f observability/grafana-configmap.yaml
 
-install-platform: install-cert-manager install-kserve install-monitoring
+install-keda:
+	@echo "Installing KEDA v2.20.0..."
+	helm repo add kedacore https://kedacore.github.io/charts || true
+	helm repo update
+	helm install keda kedacore/keda \
+		--namespace keda \
+		--create-namespace \
+		--values platform/keda/values.yaml \
+		--wait \
+		--timeout 10m
+
+install-platform: install-cert-manager install-kserve install-monitoring install-keda
 	@echo "Platform installation complete."
 
 # --- Model deployment ---
@@ -122,6 +142,11 @@ deploy-models: copy-models-to-nodes
 	kubectl apply -f models/llama-1b.yaml
 	kubectl apply -f models/qwen-3b.yaml
 
+apply-scaledobjects:
+	@echo "Applying KEDA ScaledObjects..."
+	kubectl apply -f models/qwen-0-5b-scaledobject.yaml
+	kubectl apply -f models/qwen-3b-scaledobject.yaml
+
 build-router:
 	@echo "Building router image..."
 	docker build -t llm-router:latest router/
@@ -132,7 +157,7 @@ deploy-router: build-router
 	kubectl apply -f router/manifests/deployment.yaml
 	kubectl apply -f router/manifests/podmonitor.yaml
 
-deploy-all: install-platform deploy-models deploy-router
+deploy-all: install-platform deploy-models deploy-router apply-scaledobjects
 	@echo "All components deployed."
 
 # --- Testing ---
